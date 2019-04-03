@@ -1,19 +1,12 @@
 import controller.pid_parameters as pidp
 
 
-class pid:
+class PID:
 
-    def __init__(self, lock, name):
+    def __init__(self, lock, name, PID_parameter):
         # Assignment of PIDParameters
-        self.__p = pidp.PIDParameters()
-        self.__p.Beta = 1.0
-        self.__p.H = 0.1
-        self.__p.integratorOn = False
-        self.__p.K = -0.13
-        self.__p.Ti = 0.0
-        self.__p.Tr = 10
-        self.__p.Td = 1.6
-        self.__p.N = 5
+        self.__p = PID_parameter
+
         # Initialization of Private Class Variables
         self.__D = 0
         self.__I = 0
