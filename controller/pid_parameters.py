@@ -2,15 +2,15 @@
 
 class PIDParameters:
 
-    def __init__(self):
-        self.Beta = 1.0
-        self.H = 0.1
-        self.integratorOn = False
-        self.K = -0.13
-        self.Ti = 0.0
-        self.Tr = 10
-        self.Td = 1.6
-        self.N = 5
+    def __init__(self, Beta, H, integrator_on, K, Ti, Tr, Td, N):
+        self.Beta =Beta
+        self.H = H
+        self.integrator_on = integrator_on
+        self.K = K
+        self.Ti = Ti
+        self.Tr = Tr
+        self.Td = Td
+        self.N = N
 
 
 

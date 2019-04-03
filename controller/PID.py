@@ -30,10 +30,12 @@ class PID:
         return self.__v
 
     def updateState(self, u):
+        self.lock.aquire()
         if self.__p.integratorOn:
             self.__I = self.__I + (self.__p.K * self.__p.H / self.__p.Ti) * self.__e + (self.__p.H / self.__p.Tr) * (u -self.__v)
         else:
             self.__I = 0
+        self.lock.release()
 
     def getHmillis(self):
         return self.__p.H * 1000
