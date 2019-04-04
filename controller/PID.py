@@ -18,12 +18,15 @@ class PID:
 
     def calculateOutput(self, y, yref):
         self.lock.aquire()
-
-        self.__D = (self.p.Td / (self.p.Td + self.p.N * self.p.H)) * self.__D - (
+        if self.__p.derivator_on:
+            self.__D = (self.p.Td / (self.p.Td + self.p.N * self.p.H)) * self.__D - (
                 self.__p.K * self.__p.Td * self.__p.N) * (y - self.__oldY) / (self.__p.Td + self.__p.N * self.__p.H)
+        else:
+            self.__D = 0
+
         self.__e = yref - y
         self.__v = self.__p.K * (
-                    self.__p.Beta * yref - y) + self.__p.I + self.__p.D  # I is 0.0 if integratorOn is false
+                    self.__p.Beta * yref - y) + self.__I + self.__D  # I is 0.0 if integratorOn is false
         self.__oldY = y
 
         self.lock.release()
@@ -31,7 +34,7 @@ class PID:
 
     def updateState(self, u):
         self.lock.aquire()
-        if self.__p.integratorOn:
+        if self.__p.integrator_on:
             self.__I = self.__I + (self.__p.K * self.__p.H / self.__p.Ti) * self.__e + (self.__p.H / self.__p.Tr) * (u -self.__v)
         else:
             self.__I = 0
