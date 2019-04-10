@@ -5,7 +5,6 @@ import time
 import termios
 import logging
 import threading
-
 import numpy as np
 import transformations as trans
 from cflib import crazyflie, crtp
@@ -34,6 +33,8 @@ def read_input(file=sys.stdin):
 
 
 class ControllerThread(threading.Thread):
+    gravity = 9.81
+    mass = 0.027
     period_in_ms = 20  # Control period. [ms]
     thrust_step = 5e3  # Thrust step with W/S. [65535 = 100% PWM duty cycle]
     thrust_initial = 0
@@ -46,6 +47,9 @@ class ControllerThread(threading.Thread):
     def __init__(self, cf):
         super(ControllerThread, self).__init__()
         self.cf = cf
+        self.x_state = 0
+        self.y_state = 0
+        self.z_state = 0
 
         # Reset state
         self.disable(stop=False)
@@ -206,23 +210,43 @@ class ControllerThread(threading.Thread):
                 self.loop_sleep(time_start)
 
     def calc_control_signals(self):
-        # THIS IS WHERE YOU SHOULD PUT YOUR CONTROL CODE
-        # THAT OUTPUTS THE REFERENCE VALUES FOR
-        # ROLL PITCH, YAWRATE AND THRUST
-        # WHICH ARE TAKEN CARE OF BY THE ONBOARD CONTROL LOOPS
         roll, pitch, yaw = trans.euler_from_quaternion(self.attq)
 
         # Compute control errors in position
+        x, y, z = self.pos
+        vx, vy, vz = self.vel
         ex, ey, ez = self.pos_ref - self.pos
+        lrx = 1.3883
+        lry = -1.3883
+        lrz = 1.1374
+        l_x = np.array([1.3883, 0.5284, -0.9482])
+        l_y = np.array([-1.3883, -0.5284, 0.9482])
+        l_z = np.array([1.1374, 0.2458, -0.9089])
 
-        # The code below will simply send the thrust that you can set using
-        # the keyboard and put all other control signals to zero. It also
-        # shows how, using numpy, you can threshold the signals to be between
-        # the lower and upper limits defined by the arrays *_limit
-        self.roll_r = np.clip(0.0, *self.roll_limit)
-        self.pitch_r = np.clip(0.0, *self.pitch_limit)
-        self.yawrate_r = np.clip(0.0, *self.yaw_limit)
-        self.thrust_r = np.clip(self.thrust_r, *self.thrust_limit)
+        # Pitch control signal given by x-axis state feedback
+        u_pitch = lrx - np.dot(l_x, np.array([x, vx, self.x_state]).transpose())
+        self.roll_r = np.clip(u_pitch, *self.roll_limit)
+        self.x_state += self.period_in_ms*ex
+
+        # Roll control signal given by y-axis state feedback
+        u_roll = lry - np.dot(l_y, np.array([y, vy, self.y_state]).transpose())
+        self.pitch_r = np.clip(u_roll, *self.pitch_limit)
+        self.y_state += self.period_in_ms * ey
+
+        # Upwards force signal given by z-axis state feedback
+        u_force = lrz - np.dot(l_z, np.array([z, vz, self.z_state]).transpose())
+
+        # Adjust for gravity
+        u_force += self.gravity*self.mass
+
+        # Scale force to thrust (max force = 57mg), this needs to be adjusted
+        u_thrust = u_force * max(self.thrust_limit)/(57*self.mass*self.gravity)
+
+        self.thrust_r = np.clip(u_thrust, *self.thrust_limit)
+        self.z_state += self.period_in_ms * ez
+
+        # Proportional adjustment of the yaw rate -> keep to zero to achieve decoupled system
+        self.yawrate_r = np.clip(-yaw, *self.yaw_limit)
 
         message = ('ref: ({}, {}, {}, {})\n'.format(self.pos_ref[0], self.pos_ref[1], self.pos_ref[2], self.yaw_ref) +
                    'pos: ({}, {}, {}, {})\n'.format(self.pos[0], self.pos[1], self.pos[2], yaw) +
