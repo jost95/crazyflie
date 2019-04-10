@@ -12,7 +12,7 @@ from cflib.crazyflie.log import LogConfig
 
 # Set a channel - if set to None, the first available crazyflie is used
 # URI = 'radio://0/101/2M'
-URI = 'radio://0/80/250K'
+URI = None
 
 
 def read_input(file=sys.stdin):
@@ -38,8 +38,7 @@ class ControllerThread(threading.Thread):
     period_in_ms = 20  # Control period. [ms]
     thrust_step = 5e3  # Thrust step with W/S. [65535 = 100% PWM duty cycle]
     thrust_initial = 0
-    #thrust_limit = (0, 65535)
-    thrust_limit = (0, 65535*0.57)
+    thrust_limit = (0, 65535*0.71)
     roll_limit = (-30.0, 30.0)
     pitch_limit = (-30.0, 30.0)
     yaw_limit = (-200.0, 200.0)
@@ -48,6 +47,7 @@ class ControllerThread(threading.Thread):
     def __init__(self, cf):
         super(ControllerThread, self).__init__()
         self.cf = cf
+        self.start_time = time.time()
 
         # Reset state
         self.disable(stop=False)
@@ -66,7 +66,6 @@ class ControllerThread(threading.Thread):
         self.pos = np.r_[0.0, 0.0, 0.0]
         self.vel = np.r_[0.0, 0.0, 0.0]
         self.attq = np.r_[0.0, 0.0, 0.0, 1.0]
-        self.R = np.eye(3)
 
         # Attitide (roll, pitch, yaw) from stabilizer
         self.stab_att = np.r_[0.0, 0.0, 0.0]
@@ -180,7 +179,7 @@ class ControllerThread(threading.Thread):
 
         # Set the current reference to the current positional estimate, at a
         # slight elevation
-        self.pos_ref = np.r_[self.pos[:2], 1.0]
+        self.pos_ref = np.r_[self.pos[:2], 0.5]
         self.yaw_ref = 0.0
         print('Initial positional reference:', self.pos_ref)
         print('Initial thrust reference:', self.thrust_r)
@@ -210,20 +209,21 @@ class ControllerThread(threading.Thread):
                 self.loop_sleep(time_start)
 
     def calc_control_signals(self):
-        yaw, pitch, roll = trans.euler_from_quaternion(self.attq)
+        #yaw, pitch, roll = trans.euler_from_quaternion(self.attq)
         
+        # Get angle in degrees
+        roll, pitch, yaw = self.stab_att*np.pi/180
+
         Rx = np.array([[1,0,0],[0,np.cos(roll),np.sin(roll)],[0,-np.sin(roll),np.cos(roll)]])
         Ry = np.array([[np.cos(pitch),0,-np.sin(pitch)],[0,1,0],[np.sin(pitch),0,np.cos(pitch)]])
         Rz = np.array([[np.cos(yaw),np.sin(yaw),0],[-np.sin(yaw),np.cos(yaw),0],[0,0,1]])
 
         vx, vy, vz = Rx @ Ry @ Rz @ self.vel
 
-        logging.warning(np.array([vx,vy,vz]))
-
         ex, ey, ez = self.pos_ref - self.pos
-        l_x = np.array([8.6940,1.3313])
-        l_y = np.array([-8.6940,-1.3313])
-        l_z = np.array([0.6892, 0.7157])
+        l_x = np.array([7.1495,2.5630])
+        l_y = np.array([-7.1495,-2.5630])
+        l_z = np.array([0.4252,1.3530])
 
         # Pitch control signal given by x-axis state feedback
         u_pitch = np.dot(l_x, np.array([ex, -vx]).transpose())
@@ -241,11 +241,10 @@ class ControllerThread(threading.Thread):
 
         # Scale force to thrust (max force = 2mg), this needs to be adjusted
         u_thrust = u_force * max(self.thrust_limit)/(2*self.gravity*self.mass)
-
-        self.thrust_r = np.clip(self.thrust_r, *self.thrust_limit)
+        self.thrust_r = np.clip(u_thrust, *self.thrust_limit)
 
         # Proportional adjustment of the yaw rate -> keep to zero to achieve decoupled system
-        self.yawrate_r = np.clip(-yaw, *self.yaw_limit)
+        self.yawrate_r = np.clip(yaw*180/np.pi, *self.yaw_limit)
 
         message = ('ref: ({}, {}, {}, {})\n'.format(self.pos_ref[0], self.pos_ref[1], self.pos_ref[2], self.yaw_ref) +
                    'pos: ({}, {}, {}, {})\n'.format(self.pos[0], self.pos[1], self.pos[2], yaw) +
