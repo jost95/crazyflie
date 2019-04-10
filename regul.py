@@ -47,9 +47,6 @@ class ControllerThread(threading.Thread):
     def __init__(self, cf):
         super(ControllerThread, self).__init__()
         self.cf = cf
-        self.x_state = 0
-        self.y_state = 0
-        self.z_state = 0
 
         # Reset state
         self.disable(stop=False)
@@ -212,45 +209,34 @@ class ControllerThread(threading.Thread):
     def calc_control_signals(self):
         roll, pitch, yaw = trans.euler_from_quaternion(self.attq)
 
-        # Compute control errors in position
-        x, y, z = self.pos
+        # Compute velocity and control errors in position
         vx, vy, vz = self.vel
         ex, ey, ez = self.pos_ref - self.pos
-        lrx = 0.9924
-        lry = -0.9924
-        lrz = 0.7154
-        l_x = np.array([0.9924, 1.0912, -0.8896])
-        l_y = np.array([-0.9924, -1.0912, 0.8896])
-        l_z = np.array([0.7154, 0.7420, -0.6824])
+        l_x = np.array([0.8981, 0.9948])
+        l_y = np.array([-0.8981, -0.9948])
+        l_z = np.array([0.6892, 0.7157])
 
         # Pitch control signal given by x-axis state feedback
-        u_pitch = lrx - np.dot(l_x, np.array([ex, vx, self.x_state]).transpose())
+        u_pitch = -np.dot(l_x, np.array([ex, -vx]).transpose())
         self.pitch_r = np.clip(u_pitch, *self.pitch_limit)
 
-        # Update integral with tracking
-        self.x_state += 1/1000*(self.period_in_ms*ex)
-
         # Roll control signal given by y-axis state feedback
-        u_roll = lry - np.dot(l_y, np.array([ey, vy, self.y_state]).transpose())
+        u_roll = -np.dot(l_y, np.array([ey, -vy]).transpose())
         self.roll_r = np.clip(u_roll, *self.roll_limit)
-        
-        # Update integral with tracking
-        self.y_state += 1/1000*(self.period_in_ms * ey)
 
         # Upwards force signal given by z-axis state feedback
-        u_force = lrz - np.dot(l_z, np.array([ez, vz, self.z_state]).transpose())
+        u_force = -np.dot(l_z, np.array([ez, -vz]).transpose())
 
         # Adjust for gravity
         u_force += self.gravity*self.mass
 
-        # Scale force to thrust (max force = 57mg), this needs to be adjusted
-        u_thrust = u_force * max(self.thrust_limit)/(57*self.gravity*self.mass)
+        # Scale force to thrust (max force = 2mg), this needs to be adjusted
+        u_thrust = u_force * max(self.thrust_limit)/(2*self.gravity*self.mass)
 
         self.thrust_r = np.clip(u_thrust, *self.thrust_limit)
-        self.z_state += 1/1000*(self.period_in_ms * ez)
 
         # Proportional adjustment of the yaw rate -> keep to zero to achieve decoupled system
-        self.yawrate_r = np.clip(0, *self.yaw_limit)
+        self.yawrate_r = np.clip(-yaw, *self.yaw_limit)
 
         message = ('ref: ({}, {}, {}, {})\n'.format(self.pos_ref[0], self.pos_ref[1], self.pos_ref[2], self.yaw_ref) +
                    'pos: ({}, {}, {}, {})\n'.format(self.pos[0], self.pos[1], self.pos[2], yaw) +
