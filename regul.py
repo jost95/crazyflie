@@ -12,7 +12,7 @@ from cflib.crazyflie.log import LogConfig
 
 # Set a channel - if set to None, the first available crazyflie is used
 # URI = 'radio://0/101/2M'
-URI = None
+URI = 'radio://0/80/250K'
 
 
 def read_input(file=sys.stdin):
@@ -38,7 +38,8 @@ class ControllerThread(threading.Thread):
     period_in_ms = 20  # Control period. [ms]
     thrust_step = 5e3  # Thrust step with W/S. [65535 = 100% PWM duty cycle]
     thrust_initial = 0
-    thrust_limit = (0, 65535)
+    #thrust_limit = (0, 65535)
+    thrust_limit = (0, 65535*0.57)
     roll_limit = (-30.0, 30.0)
     pitch_limit = (-30.0, 30.0)
     yaw_limit = (-200.0, 200.0)
@@ -145,7 +146,9 @@ class ControllerThread(threading.Thread):
         vel_bf = np.r_[data['kalman.statePX'],
                        data['kalman.statePY'],
                        data['kalman.statePZ']]
-        self.vel = np.dot(self.R, vel_bf)
+
+        #self.vel = np.dot(self.R, vel_bf)
+        self.vel = vel_bf
 
     def _log_data_att(self, timestamp, data, logconf):
         # NOTE q0 is real part of Kalman state's quaternion, but
@@ -207,25 +210,31 @@ class ControllerThread(threading.Thread):
                 self.loop_sleep(time_start)
 
     def calc_control_signals(self):
-        roll, pitch, yaw = trans.euler_from_quaternion(self.attq)
+        yaw, pitch, roll = trans.euler_from_quaternion(self.attq)
+        
+        Rx = np.array([[1,0,0],[0,np.cos(roll),np.sin(roll)],[0,-np.sin(roll),np.cos(roll)]])
+        Ry = np.array([[np.cos(pitch),0,-np.sin(pitch)],[0,1,0],[np.sin(pitch),0,np.cos(pitch)]])
+        Rz = np.array([[np.cos(yaw),np.sin(yaw),0],[-np.sin(yaw),np.cos(yaw),0],[0,0,1]])
 
-        # Compute velocity and control errors in position
-        vx, vy, vz = self.vel
+        vx, vy, vz = Rx @ Ry @ Rz @ self.vel
+
+        logging.warning(np.array([vx,vy,vz]))
+
         ex, ey, ez = self.pos_ref - self.pos
-        l_x = np.array([0.8981, 0.9948])
-        l_y = np.array([-0.8981, -0.9948])
+        l_x = np.array([8.6940,1.3313])
+        l_y = np.array([-8.6940,-1.3313])
         l_z = np.array([0.6892, 0.7157])
 
         # Pitch control signal given by x-axis state feedback
-        u_pitch = -np.dot(l_x, np.array([ex, -vx]).transpose())
+        u_pitch = np.dot(l_x, np.array([ex, -vx]).transpose())
         self.pitch_r = np.clip(u_pitch, *self.pitch_limit)
 
         # Roll control signal given by y-axis state feedback
-        u_roll = -np.dot(l_y, np.array([ey, -vy]).transpose())
+        u_roll = np.dot(l_y, np.array([ey, -vy]).transpose())
         self.roll_r = np.clip(u_roll, *self.roll_limit)
 
         # Upwards force signal given by z-axis state feedback
-        u_force = -np.dot(l_z, np.array([ez, -vz]).transpose())
+        u_force = np.dot(l_z, np.array([ez, -vz]).transpose())
 
         # Adjust for gravity
         u_force += self.gravity*self.mass
@@ -233,7 +242,7 @@ class ControllerThread(threading.Thread):
         # Scale force to thrust (max force = 2mg), this needs to be adjusted
         u_thrust = u_force * max(self.thrust_limit)/(2*self.gravity*self.mass)
 
-        self.thrust_r = np.clip(u_thrust, *self.thrust_limit)
+        self.thrust_r = np.clip(self.thrust_r, *self.thrust_limit)
 
         # Proportional adjustment of the yaw rate -> keep to zero to achieve decoupled system
         self.yawrate_r = np.clip(-yaw, *self.yaw_limit)
