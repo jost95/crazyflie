@@ -35,10 +35,10 @@ def read_input(file=sys.stdin):
 class ControllerThread(threading.Thread):
     gravity = 9.81
     mass = 0.027
-    period_in_ms = 20  # Control period. [ms]
+    period_in_ms = 30  # Control period. [ms]
     thrust_step = 5e3  # Thrust step with W/S. [65535 = 100% PWM duty cycle]
     thrust_initial = 0
-    thrust_limit = (0, 65535*0.71)
+    thrust_limit = (0, 65535)
     roll_limit = (-30.0, 30.0)
     pitch_limit = (-30.0, 30.0)
     yaw_limit = (-200.0, 200.0)
@@ -179,7 +179,7 @@ class ControllerThread(threading.Thread):
 
         # Set the current reference to the current positional estimate, at a
         # slight elevation
-        self.pos_ref = np.r_[self.pos[:2], 0.5]
+        self.pos_ref = np.r_[self.pos[:2], 1.0]
         self.yaw_ref = 0.0
         print('Initial positional reference:', self.pos_ref)
         print('Initial thrust reference:', self.thrust_r)
@@ -221,9 +221,9 @@ class ControllerThread(threading.Thread):
         vx, vy, vz = Rx @ Ry @ Rz @ self.vel
 
         ex, ey, ez = self.pos_ref - self.pos
-        l_x = np.array([7.1495,2.5630])
-        l_y = np.array([-7.1495,-2.5630])
-        l_z = np.array([0.4252,1.3530])
+        l_x = np.array([6.0957,2.2268])
+        l_y = np.array([-6.0957,-2.2268])
+        l_z = np.array([2.5272,0.8804])
 
         # Pitch control signal given by x-axis state feedback
         u_pitch = np.dot(l_x, np.array([ex, -vx]).transpose())
@@ -240,7 +240,8 @@ class ControllerThread(threading.Thread):
         u_force += self.gravity*self.mass
 
         # Scale force to thrust (max force = 2mg), this needs to be adjusted
-        u_thrust = u_force * max(self.thrust_limit)/(2*self.gravity*self.mass)
+        #u_thrust = u_force * max(self.thrust_limit)/(2*self.gravity*self.mass)
+        u_thrust = u_force*45000
         self.thrust_r = np.clip(u_thrust, *self.thrust_limit)
 
         # Proportional adjustment of the yaw rate -> keep to zero to achieve decoupled system
