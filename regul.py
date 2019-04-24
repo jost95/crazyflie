@@ -5,7 +5,6 @@ import time
 import termios
 import logging
 import threading
-
 import numpy as np
 import transformations as trans
 from cflib import crazyflie, crtp
@@ -34,7 +33,9 @@ def read_input(file=sys.stdin):
 
 
 class ControllerThread(threading.Thread):
-    period_in_ms = 20  # Control period. [ms]
+    gravity = 9.81
+    mass = 0.027
+    period_in_ms = 30  # Control period. [ms]
     thrust_step = 5e3  # Thrust step with W/S. [65535 = 100% PWM duty cycle]
     thrust_initial = 0
     thrust_limit = (0, 65535)
@@ -46,6 +47,7 @@ class ControllerThread(threading.Thread):
     def __init__(self, cf):
         super(ControllerThread, self).__init__()
         self.cf = cf
+        self.start_time = time.time()
 
         # Reset state
         self.disable(stop=False)
@@ -64,7 +66,6 @@ class ControllerThread(threading.Thread):
         self.pos = np.r_[0.0, 0.0, 0.0]
         self.vel = np.r_[0.0, 0.0, 0.0]
         self.attq = np.r_[0.0, 0.0, 0.0, 1.0]
-        self.R = np.eye(3)
 
         # Attitide (roll, pitch, yaw) from stabilizer
         self.stab_att = np.r_[0.0, 0.0, 0.0]
@@ -144,7 +145,9 @@ class ControllerThread(threading.Thread):
         vel_bf = np.r_[data['kalman.statePX'],
                        data['kalman.statePY'],
                        data['kalman.statePZ']]
-        self.vel = np.dot(self.R, vel_bf)
+
+        #self.vel = np.dot(self.R, vel_bf)
+        self.vel = vel_bf
 
     def _log_data_att(self, timestamp, data, logconf):
         # NOTE q0 is real part of Kalman state's quaternion, but
@@ -206,23 +209,43 @@ class ControllerThread(threading.Thread):
                 self.loop_sleep(time_start)
 
     def calc_control_signals(self):
-        # THIS IS WHERE YOU SHOULD PUT YOUR CONTROL CODE
-        # THAT OUTPUTS THE REFERENCE VALUES FOR
-        # ROLL PITCH, YAWRATE AND THRUST
-        # WHICH ARE TAKEN CARE OF BY THE ONBOARD CONTROL LOOPS
-        roll, pitch, yaw = trans.euler_from_quaternion(self.attq)
+        #yaw, pitch, roll = trans.euler_from_quaternion(self.attq)
+        
+        # Get angle in degrees
+        roll, pitch, yaw = self.stab_att*np.pi/180
 
-        # Compute control errors in position
+        Rx = np.array([[1,0,0],[0,np.cos(roll),np.sin(roll)],[0,-np.sin(roll),np.cos(roll)]])
+        Ry = np.array([[np.cos(pitch),0,-np.sin(pitch)],[0,1,0],[np.sin(pitch),0,np.cos(pitch)]])
+        Rz = np.array([[np.cos(yaw),np.sin(yaw),0],[-np.sin(yaw),np.cos(yaw),0],[0,0,1]])
+
+        vx, vy, vz = Rx @ Ry @ Rz @ self.vel
+
         ex, ey, ez = self.pos_ref - self.pos
+        l_x = np.array([6.0957,2.2268])
+        l_y = np.array([-6.0957,-2.2268])
+        l_z = np.array([2.5272,0.8804])
 
-        # The code below will simply send the thrust that you can set using
-        # the keyboard and put all other control signals to zero. It also
-        # shows how, using numpy, you can threshold the signals to be between
-        # the lower and upper limits defined by the arrays *_limit
-        self.roll_r = np.clip(0.0, *self.roll_limit)
-        self.pitch_r = np.clip(0.0, *self.pitch_limit)
-        self.yawrate_r = np.clip(0.0, *self.yaw_limit)
-        self.thrust_r = np.clip(self.thrust_r, *self.thrust_limit)
+        # Pitch control signal given by x-axis state feedback
+        u_pitch = np.dot(l_x, np.array([ex, -vx]).transpose())
+        self.pitch_r = np.clip(u_pitch, *self.pitch_limit)
+
+        # Roll control signal given by y-axis state feedback
+        u_roll = np.dot(l_y, np.array([ey, -vy]).transpose())
+        self.roll_r = np.clip(u_roll, *self.roll_limit)
+
+        # Upwards force signal given by z-axis state feedback
+        u_force = np.dot(l_z, np.array([ez, -vz]).transpose())
+
+        # Adjust for gravity
+        u_force += self.gravity*self.mass
+
+        # Scale force to thrust (max force = 2mg), this needs to be adjusted
+        #u_thrust = u_force * max(self.thrust_limit)/(2*self.gravity*self.mass)
+        u_thrust = u_force*45000
+        self.thrust_r = np.clip(u_thrust, *self.thrust_limit)
+
+        # Proportional adjustment of the yaw rate -> keep to zero to achieve decoupled system
+        self.yawrate_r = np.clip(yaw*180/np.pi, *self.yaw_limit)
 
         message = ('ref: ({}, {}, {}, {})\n'.format(self.pos_ref[0], self.pos_ref[1], self.pos_ref[2], self.yaw_ref) +
                    'pos: ({}, {}, {}, {})\n'.format(self.pos[0], self.pos[1], self.pos[2], yaw) +
