@@ -253,6 +253,7 @@ class ControllerThread(threading.Thread):
                    'control: ({}, {}, {}, {})\n'.format(self.roll_r, self.pitch_r, self.yawrate_r, self.thrust_r))
         self.print_at_period(2.0, message)
 
+
     def print_at_period(self, period, message):
         """ Prints the message at a given period """
         if (time.time() - period) > self.last_time_print:
