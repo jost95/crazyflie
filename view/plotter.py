@@ -4,7 +4,6 @@ import time
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 
-
 class DataPlot:
     def __init__(self, max_entries=20):
         self.axis_x = deque(maxlen=max_entries)

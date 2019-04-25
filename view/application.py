@@ -1,14 +1,19 @@
 from tkinter import Tk, StringVar, Canvas, Scale, DoubleVar
 from tkinter.ttk import Progressbar, Button, OptionMenu, Label, Notebook, Frame, Entry
 import matplotlib
+matplotlib.use("TkAgg")
+from matplotlib import pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 import matplotlib.animation as animation
 from matplotlib import style
 from cflib import crazyflie, crtp
 from cflib.crazyflie.log import LogConfig
-style.use('ggplot')
-matplotlib.use("TkAgg")
+from random import randint
+import time
+from view.plotter import DataPlot, RealtimePlot
+#style.use('ggplot')
+
 
 
 # All collback functions
@@ -181,7 +186,7 @@ flight_data_label = Label(flight_control_page, text="Flight data", font=("helvet
 flight_data_label.grid(row=0, column=4, sticky="W")
 
 fig = Figure(figsize=(10, 5), facecolor='#ececec')
-fig.text(0.5, 0.01, 'Time [ms]', ha='center')
+fig.text(0.5, 0.01, 'Time [s]', ha='center')
 fig.text(0.01, 0.5, 'Output', va='center', rotation='vertical')
 ax1 = fig.add_subplot(221)
 ax2 = fig.add_subplot(222)
@@ -190,7 +195,7 @@ ax4 = fig.add_subplot(224)
 
 graph = FigureCanvasTkAgg(fig, master=flight_control_page)
 graph.get_tk_widget().grid(row=1, column=4, sticky="WE", rowspan=10)
-
+graph.draw()
 
 # Path Drawer
 path_drawer_label = Label(flight_control_page, text="Path drawer", font=("helvetica", 13, "bold"))
@@ -198,20 +203,28 @@ path_drawer_label.grid(row=11, column=4, sticky="W")
 drawable_canvas = Canvas(flight_control_page, width=700, height=200, bg='#ECECEC')
 drawable_canvas.grid(row=12, column=4, sticky="WEN", rowspan=10)
 
+#
+t0 = time.time()
+data1 = DataPlot()
+data2 = DataPlot()
+data3 = DataPlot()
+data4 = DataPlot()
+data_plotter1 = RealtimePlot(ax1)
+data_plotter2 = RealtimePlot(ax2)
+data_plotter3 = RealtimePlot(ax3)
+data_plotter4 = RealtimePlot(ax4)
 
+# Updates plots
 def animate(i):
-    pull_data = open('sampleText.txt', 'r').read()
-    data_array = pull_data.split('\n')
-    xar = []
-    yar = []
-    for eachLine in data_array:
-        if len(eachLine) > 1:
-            x, y = eachLine.split(',')
-            xar.append(int(x))
-            yar.append(int(y))
-    ax1.clear()
-    ax1.plot(xar, yar)
-
+    t = time.time() - t0
+    data1.add(t, 30 + 1 / randint(1, 5), 35 + randint(1, 5))
+    data2.add(t, 10 + 1 / randint(1, 5), 15 + randint(1, 5))
+    data3.add(t, 5 + 1 / randint(1, 5), 10 + randint(1, 5))
+    data4.add(t, 40 + 1 / randint(1, 5), 45 + randint(1, 5))
+    data_plotter1.plot(data1)
+    data_plotter2.plot(data2)
+    data_plotter3.plot(data3)
+    data_plotter4.plot(data4)
 
 
 # Set default size for flight control page
@@ -261,6 +274,7 @@ def run():
     root.mainloop()
 
 
-#ani = animation.FuncAnimation(fig, animate, interval=1000)
-
+ani = animation.FuncAnimation(fig, animate, interval=1)
 run()
+
+
