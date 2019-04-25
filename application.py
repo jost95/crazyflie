@@ -1,21 +1,18 @@
-import threading
-
 import tkinter as tk
 import tkinter.ttk as ttk
 import time
+import matplotlib
 
 from cflib import crtp
-
-import matplotlib
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg as mcanvas
-from matplotlib.figure import Figure as mfig
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg as MCanvas
+from matplotlib.figure import Figure as MFigure
 from matplotlib import style as mstyle
 
 mstyle.use('ggplot')
 matplotlib.use("TkAgg")
 
 
-class Application(threading.Thread):
+class Application:
     HEADER_FONT = "Helvetica 15 bold"
     BOLD_FONT = "Helvetica 13 bold"
     BG_COLOR = "#ececec"
@@ -29,8 +26,8 @@ class Application(threading.Thread):
         if available:
             self.connect_btn['state'] = 'normal'
 
-            for i in available:
-                radio = available[i][0]
+            for r in available:
+                radio = r[0]
                 menu.add_command(label=radio, command=lambda value=radio: self.selected_radio.set(value))
         else:
             self.connect_btn['state'] = 'disabled'
@@ -57,23 +54,24 @@ class Application(threading.Thread):
         else:
             self.engines_btn_text.set("Stop engines")
 
-    def update_x_ref(self):
-        self.signals.set_xref_position()
+    def update_xref(self):
+        self.signals.set_xref_position(self.xref_entry.get())
 
-    def __init__(self, cf, signals):
+    def update_yref(self):
+        self.signals.set_yref_position(self.yref_entry.get())
+
+    def update_zref(self):
+        self.signals.set_zref_position(self.z_ref_entry.get())
+
+    def __init__(self, root, cf, signals):
         super(Application, self).__init__()
 
+        self.root = root
         self.cf = cf
         self.signals = signals
 
         self.connected = False
         self.engines_on = False
-
-        # Root settings
-        self.root = tk.Tk()
-        self.root.title("Crazyflie control client")
-        self.root.geometry("1000x540")
-        self.root.configure(background=self.BG_COLOR)
 
         # ----- TOP MENU -----
         top_menu = ttk.Frame(self.root)
@@ -99,15 +97,15 @@ class Application(threading.Thread):
         # Toggle engines button
         self.engines_btn_text = tk.StringVar(self.root)
         self.engines_btn_text.set("Start engines")
-        self.engines_btn = ttk.Button(top_menu, textvariable=self.engines_btn_text, command=self.toggle_connection)
+        self.engines_btn = ttk.Button(top_menu, textvariable=self.engines_btn_text, state=tk.DISABLED,
+                                      command=self.toggle_connection)
         self.engines_btn.pack(side=tk.LEFT)
         # ----- END TOP MENU ------
 
         # ----- LEFT MENU -----
         left_menu = ttk.Frame(self.root)
 
-        # Create labels
-        ttk.Label(left_menu, text="Reference generator", font=self.HEADER_FONT) \
+        ttk.Label(left_menu, text="Set reference", font=self.HEADER_FONT) \
             .grid(row=0, column=0, columnspan=2, sticky="w")
 
         tk.Frame(left_menu, height=1, bg="grey") \
@@ -122,20 +120,32 @@ class Application(threading.Thread):
         # ----- X MODE -----
         ttk.Label(left_menu, text="X").grid(row=3, column=0, sticky="w")
 
-        x_reference = ttk.Entry(left_menu, width=4)
-        x_reference.grid(row=3, column=2, sticky="w")
-
-        x_reference.bind('<Return>', self.update_x_ref)
-
+        self.xref_entry = ttk.Entry(left_menu, width=4)
+        self.xref_entry.grid(row=3, column=1, sticky="w")
+        self.xref_entry.bind('<Return>', self.update_xref)
         # ----- END X MODE -----
 
+        # ----- Y MODE -----
+        ttk.Label(left_menu, text="Y").grid(row=4, column=0, sticky="w")
+
+        self.yref_entry = ttk.Entry(left_menu, width=4)
+        self.yref_entry.grid(row=4, column=1, sticky="w")
+        self.yref_entry.bind('<Return>', self.update_yref)
+
+        # ----- Z MODE -----
+        ttk.Label(left_menu, text="Z").grid(row=5, column=0, sticky="w")
+
+        self.zref_entry = ttk.Entry(left_menu, width=4)
+        self.zref_entry.grid(row=5, column=1, sticky="w")
+        self.zref_entry.bind('<Return>', self.update_zref)
+
+        # ----- CANVAS ------
         ttk.Label(left_menu, text="XY path drawer", font=self.HEADER_FONT) \
             .grid(row=6, column=0, columnspan=4, sticky="sw", pady=5)
 
         tk.Frame(left_menu, height=1, bg="grey") \
             .grid(row=7, column=0, columnspan=4, sticky="ew")
 
-        # ----- CANVAS ------
         self.drawable_canvas = tk.Canvas(left_menu, height=300, bg='#ECECEC')
         self.drawable_canvas.grid(row=8, column=0, columnspan=4, sticky="we", pady=5)
         self.drawable_canvas.bind('<Button-1>', self.click)
@@ -155,7 +165,7 @@ class Application(threading.Thread):
         tk.Frame(flight_plots, height=1, bg="grey") \
             .grid(row=1, column=0, sticky="ew", pady=5)
 
-        fig = mfig(figsize=(7, 4), facecolor='#ececec')
+        fig = MFigure(figsize=(7, 4), facecolor='#ececec')
         fig.text(0.5, 0.01, 'Time [ms]', ha='center')
         fig.text(0.01, 0.5, 'Output', va='center', rotation='vertical')
         x_plot = fig.add_subplot(221)
@@ -163,17 +173,13 @@ class Application(threading.Thread):
         z_plot = fig.add_subplot(223)
         control_plot = fig.add_subplot(224)
 
-        graph = mcanvas(fig, master=flight_plots)
+        graph = MCanvas(fig, master=flight_plots)
         graph.get_tk_widget().grid(row=2, column=0, sticky="we")
 
         # ----- GRID PLACEMENT -----
         top_menu.grid(row=0, column=0, columnspan=2, sticky="w", padx=10, pady=10)
         left_menu.grid(row=1, column=0, sticky="nw", padx=10)
         flight_plots.grid(row=1, column=1, sticky="nw", padx=10)
-
-    # Start up and run the GUI
-    def run(self):
-        self.root.mainloop()
 
     def click(self, click_event):
         self.prev_event = click_event

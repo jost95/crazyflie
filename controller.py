@@ -12,17 +12,17 @@ class Controller(threading.Thread):
         self.cf = cf
         self.signals = signals
         self.start_time = time.time()
-        self.gravity = config.gravity
-        self.mass = config.mass
-        self.period_in_ms = config.period_in_ms
-        self.thrust_limit = config.thrust_limit
-        self.roll_limit = config.roll_limit
-        self.pitch_limit = config.pitch_limit
-        self.yaw_limit = config.yaw_limit
-        self.x_feedback = np.array(config.x_feedback)
-        self.y_feedback = np.array(config.y_feedback)
-        self.z_feedback = np.array(config.z_feedback)
-        self.thrust_scale = config.thrust_scale
+        self.gravity = config["gravity"]
+        self.mass = config["mass"]
+        self.period_in_ms = config["period_in_ms"]
+        self.thrust_limit = config["thrust_limit"]
+        self.roll_limit = config["roll_limit"]
+        self.pitch_limit = config["pitch_limit"]
+        self.yaw_limit = config["yaw_limit"]
+        self.x_feedback = np.array(config["x_feedback"])
+        self.y_feedback = np.array(config["y_feedback"])
+        self.z_feedback = np.array(config["z_feedback"])
+        self.thrust_scale = config["thrust_scale"]
 
         # Disable motors as default
         self.enabled = False

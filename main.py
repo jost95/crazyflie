@@ -1,24 +1,31 @@
-import controller as c
-import application as app
-import signals as s
 import json
+import tkinter as tk
+
+from controller import Controller
+from application import Application
+from signals import Signals
 from cflib import crazyflie, crtp
 
 if __name__ == "__main__":
-    # Read default config
-    with open('config.json') as config_file:
-        config = json.load(config_file)
-
     # Initialize shared signals class
-    signals = s.Signals()
+    signals = Signals()
 
     # Initialize crazyflie
-    crtp.init_drivers(enable_debug_driver=False)
+    crtp.init_drivers(enable_debug_driver=True)
     cf = crazyflie.Crazyflie(rw_cache='./cache')
 
-    # Initialize controller
-    control = c.Controller(cf, config, signals)
-    control.start()
+    # Read default config and initialize controller
+    with open('config.json') as config_file:
+        config = json.load(config_file)
+        controller = Controller(cf, config, signals)
+        controller.start()
 
-    # Initialize GUI and plotters
-    app.Application(cf, signals)
+    # Application root
+    root = tk.Tk()
+    root.title("Crazyflie control client")
+    root.geometry("1000x540")
+    root.configure(background="#ececec")
+    Application(root, cf, signals)
+
+    # Start GUI
+    root.mainloop()
