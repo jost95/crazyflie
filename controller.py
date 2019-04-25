@@ -2,14 +2,17 @@ import time
 import threading
 import numpy as np
 from cflib.crazyflie.log import LogConfig
+from cflib import crazyflie, crtp
 
 
 class Controller(threading.Thread):
-    def __init__(self, cf, config, signals):
+    def __init__(self, config, signals):
         super(Controller, self).__init__()
 
+        crtp.init_drivers(enable_debug_driver=config["debug_driver"])
+        self.cf = crazyflie.Crazyflie(rw_cache='./cache')
+
         # Inject crazyflie and set config parameters
-        self.cf = cf
         self.signals = signals
         self.start_time = time.time()
         self.gravity = config["gravity"]
@@ -34,8 +37,13 @@ class Controller(threading.Thread):
         self.cf.connection_lost.add_callback(self._connection_lost)
         self.send_setpoint = self.cf.commander.send_setpoint
 
+        self.signals.set_cf_setup()
+
         # Exit when only thread alive
         self.daemon = True
+
+    def get_cf(self):
+        return self.cf
 
     def _connected(self, link_uri):
         print('Connected to', link_uri)
@@ -104,18 +112,18 @@ class Controller(threading.Thread):
 
     def reset_estimator(self):
         count = 0
-        curr_pos = self.signals.get_measurement_signals()
+        curr_pos = self.signals.get_position()
 
         # Position sanity check
-        while not (np.max(np.abs(curr_pos[:2])) > 20 or curr_pos[2] < 0 or curr_pos[2] > 5) and count < 5:
+        while not (np.max(np.abs(curr_pos[:2])) > 20 or curr_pos[2] < 0 or curr_pos[2] > 5) and count < 3:
             self.cf.param.set_value('kalman.resetEstimation', '1')
             time.sleep(0.1)
             self.cf.param.set_value('kalman.resetEstimation', '0')
             time.sleep(1.5)
-            curr_pos = self.signals.get_measurement_signals()
+            curr_pos = self.signals.get_position()
             count += 1
 
-        if count == 5:
+        if count == 3:
             raise RuntimeError('Position estimate out of bounds', curr_pos)
 
     def loop_sleep(self, time_start):
@@ -152,11 +160,30 @@ class Controller(threading.Thread):
         u_thrust = u_force * self.thrust_scale
         return np.clip(u_thrust, *self.thrust_limit)
 
+    def canvas_adjust_reference(self, rx, ry):
+        dx, dy = self.signals.get_canvas_diff()
+
+        if not dx == 0:
+            # Difference on screen normalized with canvas size and real area size
+            fx = 1 - dx / 300 * 3
+            fy = 1 + dy / 300 * 3
+            rx *= fx
+            ry *= fy
+
+        return rx, ry
+
     def calc_control_signals(self):
         # Get measurement signals
         attitude = self.signals.get_attitude()
         vx, vy, vz = self.get_world_velocity(attitude)
-        ex, ey, ez = self.signals.get_ref_position() - self.signals.get_position()
+        rx, ry, rz = self.signals.get_ref_position()
+        x, y, z = self.signals.get_position()
+
+        rx, ry = self.canvas_adjust_reference(rx, ry)
+
+        ex = rx - x
+        ey = ry - y
+        ez = rz - z
 
         # Get control signals
         u_pitch = self.get_angle_control(self.x_feedback, ex, vx, self.pitch_limit)
@@ -166,6 +193,7 @@ class Controller(threading.Thread):
         # Proportional adjustment of the yaw rate -> keep to zero to achieve decoupled system
         u_yawrate = np.clip(attitude[3], *self.yaw_limit)
 
+        self.signals.set_ref_position(np.r_[rx, ry, rz])
         self.signals.set_control_signals(u_roll, u_pitch, u_yawrate, u_thrust)
 
     def run(self):

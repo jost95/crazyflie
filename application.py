@@ -2,11 +2,14 @@ import tkinter as tk
 import tkinter.ttk as ttk
 import time
 import matplotlib
+import numpy as np
 
 from cflib import crtp
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg as MCanvas
 from matplotlib.figure import Figure as MFigure
 from matplotlib import style as mstyle
+
+from tkinter import messagebox
 
 mstyle.use('ggplot')
 matplotlib.use("TkAgg")
@@ -30,21 +33,47 @@ class Application:
                 radio = r[0]
                 menu.add_command(label=radio, command=lambda value=radio: self.selected_radio.set(value))
         else:
-            self.connect_btn['state'] = 'disabled'
+            messagebox.showwarning("Warning", "No Crazyflie radios found")
+
+    @staticmethod
+    def set_entry(entry, text):
+        entry.delete(0, tk.END)
+        entry.insert(0, text)
 
     def toggle_connection(self):
-        if self.connected:
+        if self.cf.is_connected():
             self.cf.close_link()
-            self.scan_btn['state'] = 'normal'
-            self.connect_btn['state'] = 'disabled'
-            self.engines_btn['state'] = 'disabled'
-            self.connect_btn_text.set("Connect")
-            self.engines_btn_text.set("Start engines")
+
+            if self.cf.is_connected():
+                messagebox.showerror("Error", "Could not disconnect from Crazyflie radio")
+            else:
+                self.scan_btn['state'] = 'normal'
+                self.connect_btn['state'] = 'disabled'
+                self.engines_btn['state'] = 'disabled'
+                self.connect_btn_text.set("Connect")
+                self.engines_btn_text.set("Start engines")
+
         else:
             self.cf.open_link(self.selected_radio.get())
-            self.scan_btn['state'] = 'disabled'
-            self.engines_btn['state'] = 'normal'
-            self.connect_btn_text.set("Disconnect")
+
+            if not self.cf.is_connected():
+                messagebox.showerror("Error", "Could not connect to Crazyflie radio")
+            else:
+                self.scan_btn['state'] = 'disabled'
+                self.engines_btn['state'] = 'normal'
+                self.connect_btn_text.set("Disconnect")
+
+                # Wait for good position estimate from controller thread
+                ref_pos = self.signals.get_ref_position()
+
+                while ref_pos[0] == 0:
+                    time.sleep(0.2)
+                    ref_pos = self.signals.get_ref_position()
+
+                # Update the current reference values
+                self.set_entry(self.xref_entry, ref_pos[0])
+                self.set_entry(self.yref_entry, ref_pos[1])
+                self.set_entry(self.zref_entry, ref_pos[2])
 
     def toggle_engines(self):
         self.signals.switch_toggle()
@@ -61,7 +90,7 @@ class Application:
         self.signals.set_yref_position(self.yref_entry.get())
 
     def update_zref(self):
-        self.signals.set_zref_position(self.z_ref_entry.get())
+        self.signals.set_zref_position(self.zref_entry.get())
 
     def __init__(self, root, cf, signals):
         super(Application, self).__init__()
@@ -69,8 +98,9 @@ class Application:
         self.root = root
         self.cf = cf
         self.signals = signals
+        self.prev_event = 0
+        self.canvas_time_start = 0
 
-        self.connected = False
         self.engines_on = False
 
         # ----- TOP MENU -----
@@ -146,8 +176,8 @@ class Application:
         tk.Frame(left_menu, height=1, bg="grey") \
             .grid(row=7, column=0, columnspan=4, sticky="ew")
 
-        self.drawable_canvas = tk.Canvas(left_menu, height=300, bg='#ECECEC')
-        self.drawable_canvas.grid(row=8, column=0, columnspan=4, sticky="we", pady=5)
+        self.drawable_canvas = tk.Canvas(left_menu, width=300, height=300, bg='#ECECEC')
+        self.drawable_canvas.grid(row=8, column=0, columnspan=4, pady=5)
         self.drawable_canvas.bind('<Button-1>', self.click)
         self.drawable_canvas.bind('<B1-Motion>', self.move)
         self.drawable_canvas.bind('<ButtonRelease-1>', self.clear_canvas)
@@ -173,6 +203,8 @@ class Application:
         z_plot = fig.add_subplot(223)
         control_plot = fig.add_subplot(224)
 
+
+
         graph = MCanvas(fig, master=flight_plots)
         graph.get_tk_widget().grid(row=2, column=0, sticky="we")
 
@@ -182,13 +214,19 @@ class Application:
         flight_plots.grid(row=1, column=1, sticky="nw", padx=10)
 
     def click(self, click_event):
+        self.canvas_time_start = time.time()
+        self.signals.set_canvas_xy_start(np.r_[click_event.x, click_event.y])
         self.prev_event = click_event
 
     def move(self, move_event):
         self.drawable_canvas.create_line(self.prev_event.x, self.prev_event.y, move_event.x, move_event.y, width=2)
         self.prev_event = move_event
 
+        if self.canvas_time_start + 0.02 < time.time():
+            self.signals.set_canvas_xy(np.r_[move_event.x, move_event.y])
+            self.canvas_time_start = time.time()
+
     def clear_canvas(self, click_event):
-        time.sleep(0.3)
         del click_event
+        time.sleep(0.3)
         self.drawable_canvas.delete("all")

@@ -10,5 +10,6 @@
   "x_feedback": [6.0957, 2.2268],
   "y_feedback": [-6.0957, -2.2268],
   "z_feedback": [2.5272, 0.8804],
-  "thrust_scale": 45000
+  "thrust_scale": 45000,
+  "debug_driver": 1
 }
