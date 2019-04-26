@@ -1,5 +1,6 @@
 import threading
 import numpy as np
+from collections import deque
 
 
 def synchronized_with_attr(lock_name):
@@ -27,6 +28,7 @@ class Signals:
         self.attitude_lock = threading.RLock()
         self.toggle_lock = threading.RLock()
         self.canvas_lock = threading.RLock()
+        self.plotter_lock = threading.RLock()
 
         # Define shared variables
         self.__cf_setup = False
@@ -43,13 +45,14 @@ class Signals:
         self.__canvas_xy = np.r_[0.0, 0.0]
 
         # For plotters
-        self.x_ref_hist = []
-        self.x_hist = []
-        self.y_ref_hist = []
-        self.y_hist = []
-        self.z_ref_hist = []
-        self.z_hist = []
-        self.thrust_hist = []
+        self.__time_hist = deque(maxlen=30)
+        self.__x_hist = deque(maxlen=30)
+        self.__xref_hist = deque(maxlen=30)
+        self.__y_hist = deque(maxlen=30)
+        self.__yref_hist = deque(maxlen=30)
+        self.__z_hist = deque(maxlen=30)
+        self.__zref_hist = deque(maxlen=30)
+        self.__thrust_hist = deque(maxlen=30)
 
     @synchronized_with_attr("canvas_lock")
     def set_canvas_xy_start(self, xy):
@@ -78,7 +81,6 @@ class Signals:
         self.__pitch = pitch
         self.__yawrate = yawrate
         self.__thrust = int(thrust)
-        self.thrust_hist.append(self.__thrust)
 
     @synchronized_with_attr("control_lock")
     def get_control(self):
@@ -137,35 +139,17 @@ class Signals:
         self.__toggle_engines = not self.__toggle_engines
 
     @synchronized_with_attr("plotter_lock")
-    def set_for_plotters(self, ref_pos, pos, thrust):
-        # Add data points
-        self.x_ref_hist.append(ref_pos[0])
-        self.y_ref_hist.append(ref_pos[1])
-        self.z_ref_hist.append(ref_pos[2])
-        self.x_hist.append(pos[0])
-        self.y_hist.append(pos[1])
-        self.z_hist.append(pos[2])
-        self.thrust_hist.append(thrust)
+    def set_for_plotter(self, time, pos, pos_ref, thrust):
+        self.__time_hist.append(time)
+        self.__x_hist.append(pos[0])
+        self.__xref_hist.append(pos_ref[0])
+        self.__y_hist.append(pos[1])
+        self.__yref_hist.append(pos_ref[1])
+        self.__z_hist.append(pos[2])
+        self.__zref_hist.append(pos_ref[2])
+        self.__thrust_hist.append(thrust)
 
-        # Slice arrays, max 30 data points allowed
-        if len(self.x_ref_hist) > self.MAX_DATA_POINTS:
-            self.x_ref_hist = self.x_ref_hist[1:]
-
-        if len(self.y_ref_hist) > self.MAX_DATA_POINTS:
-            self.y_ref_hist = self.y_ref_hist[1:]
-
-        if len(self.z_ref_hist) > self.MAX_DATA_POINTS:
-            self.z_ref_hist = self.z_ref_hist[1:]
-
-        if len(self.x_hist) > self.MAX_DATA_POINTS:
-            self.x_hist = self.x_hist[1:]
-
-        if len(self.y_hist) > self.MAX_DATA_POINTS:
-            self.y_hist = self.y_hist[1:]
-
-        if len(self.z_hist) > self.MAX_DATA_POINTS:
-            self.z_hist = self.z_hist[1:]
-
-        if len(self.thrust_hist) > self.MAX_DATA_POINTS:
-            self.thrust_hist = self.thrust_hist[1:]
-
+    @synchronized_with_attr("plotter_lock")
+    def get_for_plotter(self):
+        return self.__time_hist, self.__x_hist, self.__xref_hist, self.__y_hist, self.__yref_hist, self.__z_hist, \
+               self.__zref_hist, self.__thrust_hist
