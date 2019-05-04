@@ -16,7 +16,7 @@ def synchronized_with_attr(lock_name):
 
 
 class Signals:
-    MAX_DATA_POINTS = 50
+    MAX_DATA_POINTS = 100
 
     def __init__(self):
         # Define our different locks
@@ -45,14 +45,14 @@ class Signals:
         self.__canvas_xy = np.r_[0.0, 0.0]
 
         # For plotters
-        self.__time_hist = deque(maxlen=30)
-        self.__x_hist = deque(maxlen=30)
-        self.__xref_hist = deque(maxlen=30)
-        self.__y_hist = deque(maxlen=30)
-        self.__yref_hist = deque(maxlen=30)
-        self.__z_hist = deque(maxlen=30)
-        self.__zref_hist = deque(maxlen=30)
-        self.__thrust_hist = deque(maxlen=30)
+        self.__time_hist = deque(maxlen=self.MAX_DATA_POINTS)
+        self.__x_hist = deque(maxlen=self.MAX_DATA_POINTS)
+        self.__xref_hist = deque(maxlen=self.MAX_DATA_POINTS)
+        self.__y_hist = deque(maxlen=self.MAX_DATA_POINTS)
+        self.__yref_hist = deque(maxlen=self.MAX_DATA_POINTS)
+        self.__z_hist = deque(maxlen=self.MAX_DATA_POINTS)
+        self.__zref_hist = deque(maxlen=self.MAX_DATA_POINTS)
+        self.__thrust_hist = deque(maxlen=self.MAX_DATA_POINTS)
 
     @synchronized_with_attr("canvas_lock")
     def set_canvas_xy_start(self, xy):

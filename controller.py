@@ -219,6 +219,8 @@ class Controller(threading.Thread):
                 self.enabled = not self.enabled
                 self.signals.switch_toggle()
 
+                self.signals.get_control_signals()
+
             if self.enabled:
                 self.send_setpoint(*self.signals.get_control_signals())
 

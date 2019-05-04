@@ -3,16 +3,15 @@ import tkinter.ttk as ttk
 import time
 import matplotlib
 import numpy as np
-import threading
-from random import randint
 
 from cflib import crtp
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg as MCanvas
-from matplotlib.figure import Figure as MFigure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib import style
 
 from tkinter import messagebox
 
 matplotlib.use("TkAgg")
+style.use("ggplot")
 
 
 class Application:
@@ -83,18 +82,22 @@ class Application:
         else:
             self.engines_btn_text.set("Stop engines")
 
-    def update_xref(self):
+    def update_xref(self, e):
+        del e
         self.signals.set_xref_position(self.xref_entry.get())
 
-    def update_yref(self):
+    def update_yref(self, e):
+        del e
         self.signals.set_yref_position(self.yref_entry.get())
 
-    def update_zref(self):
+    def update_zref(self, e):
+        del e
         self.signals.set_zref_position(self.zref_entry.get())
 
-    def __init__(self, root, cf, signals):
+    def __init__(self, root, cf, signals, fig):
         super(Application, self).__init__()
 
+        self.fig = fig
         self.root = root
         self.cf = cf
         self.signals = signals
@@ -186,7 +189,7 @@ class Application:
         left_menu.columnconfigure(1, minsize=130)
         left_menu.columnconfigure(2, minsize=60)
 
-        # ----- END LEFT MENU -----
+        # ----- FLIGHT PLOTS -----
         flight_plots = ttk.Frame(self.root)
 
         ttk.Label(flight_plots, text="Flight plots", font=self.HEADER_FONT) \
@@ -195,87 +198,13 @@ class Application:
         tk.Frame(flight_plots, height=1, bg="grey") \
             .grid(row=1, column=0, sticky="ew", pady=5)
 
-        fig = MFigure(figsize=(7, 4), facecolor='#ececec')
-        fig.text(0.5, 0.01, 'Time [ms]', ha='center')
-        fig.text(0.01, 0.5, 'Output', va='center', rotation='vertical')
-        x_plot = fig.add_subplot(221)
-        x_plot.grid()
-        y_plot = fig.add_subplot(222)
-        y_plot.grid()
-        z_plot = fig.add_subplot(223)
-        z_plot.grid()
-        control_plot = fig.add_subplot(224)
-        control_plot.grid()
-
-        self.plots = [x_plot, y_plot, z_plot, control_plot]
-        self.graph = MCanvas(fig, master=flight_plots)
+        self.graph = FigureCanvasTkAgg(self.fig, master=flight_plots)
         self.graph.get_tk_widget().grid(row=2, column=0, sticky="we")
-
-        # Initialize random signal generator
-        random_thread = threading.Thread(target=self.rand_data)
-        random_thread.daemon = True
-        random_thread.start()
-
-        time.sleep(0.1)
-
-        # Initialize plotter thread
-        plotter_thread = threading.Thread(target=self.plotter)
-        plotter_thread.daemon = True
-        plotter_thread.start()
 
         # ----- GRID PLACEMENT -----
         top_menu.grid(row=0, column=0, columnspan=2, sticky="w", padx=10, pady=10)
         left_menu.grid(row=1, column=0, sticky="nw", padx=10)
         flight_plots.grid(row=1, column=1, sticky="nw", padx=10)
-
-    def plotter(self):
-        while self.engines_on:
-            plot_data = self.signals.get_for_plotter()
-
-            i = 1
-            for p in self.plots:
-                p.cla()
-                p.grid()
-
-                if not i == 7:
-                    self.plot(p, plot_data[0], plot_data[i], plot_data[i + 1])
-                else:
-                    self.plot(p, plot_data[0], plot_data[i], None)
-
-                i += 2
-
-            time.sleep(1)
-
-    def rand_data(self):
-        t0 = time.time()
-        time.sleep(0.03)
-
-        while True:
-            t = time.time() - t0
-            self.signals.set_for_plotter(t, np.r_[randint(1, 5), randint(1, 5), randint(1, 5)], np.r_[3, 3, 3],
-                                         randint(1, 5))
-
-            time.sleep(0.03)
-
-    @staticmethod
-    def plot(fig, plot_time, measurement, reference=None):
-        fig.plot(plot_time, measurement)
-
-        # Set range for x axis (time)
-        fig.set_xlim(min(plot_time), max(plot_time))
-        ymin = min(measurement)
-        ymax = max(measurement)
-
-        if reference:
-            fig.plot(plot_time, reference)
-            ymin = min([ymin, min(reference)])
-            ymax = max([ymax, max(reference)])
-
-        ymin -= 10
-        ymax += 10
-
-        fig.set_ylim(ymin, ymax)
-        fig.relim()
 
     def click(self, click_event):
         self.canvas_time_start = time.time()
@@ -294,3 +223,4 @@ class Application:
         del click_event
         time.sleep(0.3)
         self.drawable_canvas.delete("all")
+
