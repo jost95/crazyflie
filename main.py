@@ -116,7 +116,7 @@ root.resizable(False, False)
 # Define a new application
 Application(root, cf, signals, fig)
 
-ani = animation.FuncAnimation(fig, plotter, frames=1, interval=1000, blit=True)
+ani = animation.FuncAnimation(fig, plotter, frames=1, interval=500, blit=False)
 
 root.protocol("WM_DELETE_WINDOW", lambda: graceful_shutdown(root, cf))
 

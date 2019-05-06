@@ -43,7 +43,7 @@ class Signals:
         self.__att = np.r_[0.0, 0.0, 0.0]
         self.__toggle_engines = False
         self.__connected = False
-        self.__canvas_xy_start = np.r_[0.0, 0.0]
+        self.__canvas_xy_prev = np.r_[0.0, 0.0]
         self.__canvas_xy = np.r_[0.0, 0.0]
 
         # For plotters
@@ -57,17 +57,13 @@ class Signals:
         self.__thrust_hist = deque(maxlen=self.MAX_DATA_POINTS)
 
     @synchronized_with_attr("canvas_lock")
-    def set_canvas_xy_start(self, xy):
-        self.__canvas_xy_start = xy
+    def set_canvas_xy(self, xy, xy_prev):
         self.__canvas_xy = xy
-
-    @synchronized_with_attr("canvas_lock")
-    def set_canvas_xy(self, xy):
-        self.__canvas_xy = xy
+        self.__canvas_xy_prev = xy_prev
 
     @synchronized_with_attr("canvas_lock")
     def get_canvas_diff(self):
-        return self.__canvas_xy - self.__canvas_xy_start
+        return self.__canvas_xy - self.__canvas_xy_prev
 
     @synchronized_with_attr("cf_setup_lock")
     def set_cf_setup(self):

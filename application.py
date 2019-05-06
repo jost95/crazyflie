@@ -87,9 +87,9 @@ class Application:
                     self.toggle_connection()
                 else:
                     # Update the current reference values
-                    self.set_entry(self.xref_entry, ref_pos[0])
-                    self.set_entry(self.yref_entry, ref_pos[1])
-                    self.set_entry(self.zref_entry, ref_pos[2])
+                    self.set_entry(self.xref_entry, round(ref_pos[0],2))
+                    self.set_entry(self.yref_entry, round(ref_pos[1],2))
+                    self.set_entry(self.zref_entry, round(ref_pos[2],2))
 
     def toggle_engines(self):
         self.signals.switch_toggle()
@@ -225,19 +225,25 @@ class Application:
 
     def click(self, click_event):
         self.canvas_time_start = time.time()
-        self.signals.set_canvas_xy_start(np.r_[click_event.x, click_event.y])
+        xy = np.r_[click_event.x, click_event.y]
+        self.signals.set_canvas_xy(xy, xy)
         self.prev_event = click_event
 
     def move(self, move_event):
         self.drawable_canvas.create_line(self.prev_event.x, self.prev_event.y, move_event.x, move_event.y, width=2)
-        self.prev_event = move_event
 
         if self.canvas_time_start + 0.02 < time.time():
-            self.signals.set_canvas_xy(np.r_[move_event.x, move_event.y])
+            xy = np.r_[move_event.x, move_event.y]
+            xy_prev = np.r_[self.prev_event.x, self.prev_event.y]
+            self.signals.set_canvas_xy(xy, xy_prev)
             self.canvas_time_start = time.time()
+        
+        self.prev_event = move_event
 
     def clear_canvas(self, click_event):
         del click_event
         time.sleep(0.3)
+        xy = np.r_[0,0]
+        self.signals.set_canvas_xy(xy, xy)
         self.drawable_canvas.delete("all")
 

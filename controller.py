@@ -128,8 +128,8 @@ class Controller(threading.Thread):
         if count == 3:
             raise RuntimeError('Position estimate out of bounds', curr_pos)
 
-    def loop_sleep(self, time_start):
-        delta_time = 1e-3 * self.period_in_ms - (time.time() - time_start)
+    def loop_sleep(self, loop_start):
+        delta_time = 1e-3 * self.period_in_ms - (time.time() - loop_start)
         if delta_time > 0:
             time.sleep(delta_time)
         else:
@@ -165,6 +165,8 @@ class Controller(threading.Thread):
     def canvas_adjust_reference(self, rx, ry):
         dx, dy = self.signals.get_canvas_diff()
 
+        print(dx)
+
         if not dx == 0:
             # Difference on screen normalized with canvas size and real area size
             fx = 1 - dx / 300 * 3
@@ -194,9 +196,12 @@ class Controller(threading.Thread):
 
         # Proportional adjustment of the yaw rate -> keep to zero to achieve decoupled system
         u_yawrate = np.clip(attitude[2], *self.yaw_limit)
-
-        self.signals.set_ref_position(np.r_[rx, ry, rz])
+        
+        now = time.time()-self.time_start
+        pos_ref = np.r_[rx, ry, rz]
+        self.signals.set_ref_position(pos_ref)
         self.signals.set_control(u_roll, u_pitch, u_yawrate, u_thrust)
+        self.signals.set_for_plotter(now ,np.r_[x, y, z], pos_ref, u_thrust)
 
     def run(self):
         # Wait for established connection
@@ -211,8 +216,10 @@ class Controller(threading.Thread):
 
         print('Initial positional reference:', self.signals.get_ref_position())
 
+        self.time_start = time.time()
+
         while True:
-            time_start = time.time()
+            loop_start = time.time()
             self.calc_control_signals()
 
             if self.signals.read_toggle():
@@ -226,4 +233,4 @@ class Controller(threading.Thread):
             if self.enabled:
                 self.send_setpoint(*self.signals.get_control())
 
-            self.loop_sleep(time_start)
+            self.loop_sleep(loop_start)
