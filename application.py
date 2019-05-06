@@ -42,7 +42,7 @@ class Application:
     def toggle_connection(self):
         if self.signals.read_connection():
             self.cf.close_link()
-            
+
             count = 0
             while self.signals.read_connection() and count < 5:
                 time.sleep(1)
@@ -75,7 +75,7 @@ class Application:
 
                 # Wait for good position estimate from controller thread
                 ref_pos = self.signals.get_ref_position()
-                
+
                 count = 0
                 while ref_pos[0] == 0 and count < 5:
                     time.sleep(1)
@@ -87,9 +87,9 @@ class Application:
                     self.toggle_connection()
                 else:
                     # Update the current reference values
-                    self.set_entry(self.xref_entry, round(ref_pos[0],2))
-                    self.set_entry(self.yref_entry, round(ref_pos[1],2))
-                    self.set_entry(self.zref_entry, round(ref_pos[2],2))
+                    self.set_entry(self.xref_entry, round(ref_pos[0], 2))
+                    self.set_entry(self.yref_entry, round(ref_pos[1], 2))
+                    self.set_entry(self.zref_entry, round(ref_pos[2], 2))
 
     def toggle_engines(self):
         self.signals.switch_toggle()
@@ -237,13 +237,12 @@ class Application:
             xy_prev = np.r_[self.prev_event.x, self.prev_event.y]
             self.signals.set_canvas_xy(xy, xy_prev)
             self.canvas_time_start = time.time()
-        
+
         self.prev_event = move_event
 
     def clear_canvas(self, click_event):
         del click_event
         time.sleep(0.3)
-        xy = np.r_[0,0]
+        xy = np.r_[0, 0]
         self.signals.set_canvas_xy(xy, xy)
         self.drawable_canvas.delete("all")
-

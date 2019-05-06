@@ -50,7 +50,7 @@ def plotter(frame):
     plot_data = signals.get_for_plotter()
     time_data = plot_data[0]
 
-    if (len(time_data) > 0):
+    if len(time_data) > 0:
         # axis limits checking. Same as before, just for both axes
         k = 1
         for ax in axes:
@@ -93,9 +93,9 @@ def rand_data():
 
 
 # Initialize random signal generator
-#random_thread = threading.Thread(target=rand_data)
-#random_thread.daemon = True
-#random_thread.start()
+# random_thread = threading.Thread(target=rand_data)
+# random_thread.daemon = True
+# random_thread.start()
 
 # Read default config and initialize controller
 with open('config.json') as config_file:
