@@ -26,7 +26,8 @@ class Signals:
         self.position_lock = threading.RLock()
         self.velocity_lock = threading.RLock()
         self.attitude_lock = threading.RLock()
-        self.toggle_lock = threading.RLock()
+        self.engine_lock = threading.RLock()
+        self.connection_lock = threading.RLock()
         self.canvas_lock = threading.RLock()
         self.plotter_lock = threading.RLock()
 
@@ -41,6 +42,7 @@ class Signals:
         self.__vel = np.r_[0.0, 0.0, 0.0]
         self.__att = np.r_[0.0, 0.0, 0.0]
         self.__toggle_engines = False
+        self.__connected = False
         self.__canvas_xy_start = np.r_[0.0, 0.0]
         self.__canvas_xy = np.r_[0.0, 0.0]
 
@@ -130,13 +132,21 @@ class Signals:
     def get_attitude(self):
         return self.__pos
 
-    @synchronized_with_attr("toggle_lock")
+    @synchronized_with_attr("engine_lock")
     def read_toggle(self):
         return self.__toggle_engines
 
-    @synchronized_with_attr("toggle_lock")
+    @synchronized_with_attr("engine_lock")
     def switch_toggle(self):
         self.__toggle_engines = not self.__toggle_engines
+
+    @synchronized_with_attr("connection_lock")
+    def read_connection(self):
+        return self.__connected
+
+    @synchronized_with_attr("connection_lock")
+    def switch_connection(self):
+        self.__connected = not self.__connected
 
     @synchronized_with_attr("plotter_lock")
     def set_for_plotter(self, time, pos, pos_ref, thrust):

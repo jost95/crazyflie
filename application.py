@@ -40,10 +40,15 @@ class Application:
         entry.insert(0, text)
 
     def toggle_connection(self):
-        if self.cf.is_connected():
+        if self.signals.read_connection():
             self.cf.close_link()
+            
+            count = 0
+            while self.signals.read_connection() and count < 5:
+                time.sleep(1)
+                count += 1
 
-            if self.cf.is_connected():
+            if self.signals.read_connection():
                 messagebox.showerror("Error", "Could not disconnect from Crazyflie radio")
             else:
                 self.scan_btn['state'] = 'normal'
@@ -55,8 +60,14 @@ class Application:
         else:
             self.cf.open_link(self.selected_radio.get())
 
-            if not self.cf.is_connected():
-                messagebox.showerror("Error", "Could not connect to Crazyflie radio")
+            count = 0
+            while not self.signals.read_connection() and count < 5:
+                time.sleep(1)
+                count += 1
+
+            if not self.signals.read_connection():
+                messagebox.showerror("Error", "Could not connect to Crazyflie radio, trying to shutdown")
+                self.cf.close_link()
             else:
                 self.scan_btn['state'] = 'disabled'
                 self.engines_btn['state'] = 'normal'
@@ -64,15 +75,21 @@ class Application:
 
                 # Wait for good position estimate from controller thread
                 ref_pos = self.signals.get_ref_position()
-
-                while ref_pos[0] == 0:
-                    time.sleep(0.2)
+                
+                count = 0
+                while ref_pos[0] == 0 and count < 5:
+                    time.sleep(1)
                     ref_pos = self.signals.get_ref_position()
+                    count += 1
 
-                # Update the current reference values
-                self.set_entry(self.xref_entry, ref_pos[0])
-                self.set_entry(self.yref_entry, ref_pos[1])
-                self.set_entry(self.zref_entry, ref_pos[2])
+                if count == 5:
+                    messagebox.showerror("Error", "Could not get position estimate, disconnecting...")
+                    self.toggle_connection()
+                else:
+                    # Update the current reference values
+                    self.set_entry(self.xref_entry, ref_pos[0])
+                    self.set_entry(self.yref_entry, ref_pos[1])
+                    self.set_entry(self.zref_entry, ref_pos[2])
 
     def toggle_engines(self):
         self.signals.switch_toggle()
@@ -131,7 +148,7 @@ class Application:
         self.engines_btn_text = tk.StringVar(self.root)
         self.engines_btn_text.set("Start engines")
         self.engines_btn = ttk.Button(top_menu, textvariable=self.engines_btn_text, state=tk.DISABLED,
-                                      command=self.toggle_connection)
+                                      command=self.toggle_engines)
         self.engines_btn.pack(side=tk.LEFT)
         # ----- END TOP MENU ------
 

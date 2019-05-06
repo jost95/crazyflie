@@ -46,28 +46,30 @@ for axe in axes:
 # Updates the plot
 def plotter(frame):
     del frame
+
     plot_data = signals.get_for_plotter()
     time_data = plot_data[0]
 
-    # axis limits checking. Same as before, just for both axes
-    k = 1
-    for ax in axes:
-        ax.set_xlim(min(time_data), max(time_data) + 0.1)
-        if k == 7:
-            ax.set_ylim(min(plot_data[k]) - 3, max(plot_data[k]) + 3)
-        else:
-            ax.set_ylim(min([min(plot_data[k]), min(plot_data[k + 1])]) - 3,
-                        max([max(plot_data[k]), max(plot_data[k + 1])]) + 3)
+    if (len(time_data) > 0):
+        # axis limits checking. Same as before, just for both axes
+        k = 1
+        for ax in axes:
+            ax.set_xlim(min(time_data), max(time_data) + 0.1)
+            if k == 7:
+                ax.set_ylim(min(plot_data[k]) - 3, max(plot_data[k]) + 3)
+            else:
+                ax.set_ylim(min([min(plot_data[k]), min(plot_data[k + 1])]) - 3,
+                            max([max(plot_data[k]), max(plot_data[k + 1])]) + 3)
 
-        ax.figure.canvas.draw()
-        k += 2
+            ax.figure.canvas.draw()
+            k += 2
 
-    k = 1
-    for l in lines:
-        if not k == 8:
-            l.set_data(time_data, plot_data[k])
+        k = 1
+        for l in lines:
+            if not k == 8:
+                l.set_data(time_data, plot_data[k])
 
-        k += 1
+            k += 1
 
     return lines
 
@@ -91,9 +93,9 @@ def rand_data():
 
 
 # Initialize random signal generator
-random_thread = threading.Thread(target=rand_data)
-random_thread.daemon = True
-random_thread.start()
+#random_thread = threading.Thread(target=rand_data)
+#random_thread.daemon = True
+#random_thread.start()
 
 # Read default config and initialize controller
 with open('config.json') as config_file:

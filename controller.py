@@ -48,6 +48,8 @@ class Controller(threading.Thread):
     def _connected(self, link_uri):
         print('Connected to', link_uri)
 
+        self.signals.switch_connection()
+
         log_stab_att = LogConfig(name='Stabilizer', period_in_ms=self.period_in_ms)
         log_stab_att.add_variable('stabilizer.roll', 'float')
         log_stab_att.add_variable('stabilizer.pitch', 'float')
@@ -90,8 +92,8 @@ class Controller(threading.Thread):
     def _connection_lost(link_uri, msg):
         print('Connection to %s lost: %s' % (link_uri, msg))
 
-    @staticmethod
-    def _disconnected(link_uri):
+    def _disconnected(self, link_uri):
+        self.signals.switch_connection()
         print('Disconnected from %s' % link_uri)
 
     @staticmethod
@@ -115,7 +117,7 @@ class Controller(threading.Thread):
         curr_pos = self.signals.get_position()
 
         # Position sanity check
-        while not (np.max(np.abs(curr_pos[:2])) > 20 or curr_pos[2] < 0 or curr_pos[2] > 5) and count < 3:
+        while (np.max(np.abs(curr_pos[:2])) > 20 or np.abs(curr_pos[2]) > 5) and count < 3:
             self.cf.param.set_value('kalman.resetEstimation', '1')
             time.sleep(0.1)
             self.cf.param.set_value('kalman.resetEstimation', '0')
@@ -191,10 +193,10 @@ class Controller(threading.Thread):
         u_thrust = self.get_thrust_control(ez, vz)
 
         # Proportional adjustment of the yaw rate -> keep to zero to achieve decoupled system
-        u_yawrate = np.clip(attitude[3], *self.yaw_limit)
+        u_yawrate = np.clip(attitude[2], *self.yaw_limit)
 
         self.signals.set_ref_position(np.r_[rx, ry, rz])
-        self.signals.set_control_signals(u_roll, u_pitch, u_yawrate, u_thrust)
+        self.signals.set_control(u_roll, u_pitch, u_yawrate, u_thrust)
 
     def run(self):
         # Wait for established connection
@@ -219,9 +221,9 @@ class Controller(threading.Thread):
                 self.enabled = not self.enabled
                 self.signals.switch_toggle()
 
-                self.signals.get_control_signals()
+                self.signals.get_control()
 
             if self.enabled:
-                self.send_setpoint(*self.signals.get_control_signals())
+                self.send_setpoint(*self.signals.get_control())
 
             self.loop_sleep(time_start)
