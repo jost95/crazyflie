@@ -28,6 +28,13 @@ class Controller(threading.Thread):
         self.z_feedback = np.array(config["z_feedback"])
         self.thrust_scale = config["thrust_scale"]
 
+        self.pos = np.r_[0.0, 0.0, 0.0]
+        self.vel = np.r_[0.0, 0.0, 0.0]
+        self.attitude = np.r_[0.0, 0.0, 0.0]
+        self.control = np.r_[0.0, 0.0, 0.0, 0.0]
+        
+        
+
         # Disable motors as default
         self.enabled = False
 
@@ -103,15 +110,18 @@ class Controller(threading.Thread):
 
     def _log_data_stab_att(self, timestamp, data, logconf):
         del timestamp, logconf
-        self.signals.set_attitude(np.r_[data['stabilizer.roll'], data['stabilizer.pitch'], data['stabilizer.yaw']])
+        self.attitude = np.r_[data['stabilizer.roll'], data['stabilizer.pitch'], data['stabilizer.yaw']]
+        # self.signals.set_attitude(np.r_[data['stabilizer.roll'], data['stabilizer.pitch'], data['stabilizer.yaw']])
 
     def _log_data_pos(self, timestamp, data, logconf):
         del timestamp, logconf
-        self.signals.set_position(np.r_[data['kalman.stateX'], data['kalman.stateY'], data['kalman.stateZ']])
+        self.pos = np.r_[data['kalman.stateX'], data['kalman.stateY'], data['kalman.stateZ']]
+        # self.signals.set_position(np.r_[data['kalman.stateX'], data['kalman.stateY'], data['kalman.stateZ']])
 
     def _log_data_vel(self, timestamp, data, logconf):
         del timestamp, logconf
-        self.signals.set_velocity(np.r_[data['kalman.statePX'], data['kalman.statePY'], data['kalman.statePZ']])
+        self.vel = np.r_[data['kalman.statePX'], data['kalman.statePY'], data['kalman.statePZ']]
+        # self.signals.set_velocity(np.r_[data['kalman.statePX'], data['kalman.statePY'], data['kalman.statePZ']])
 
     def reset_estimator(self):
         count = 0
@@ -144,7 +154,7 @@ class Controller(threading.Thread):
         ry = np.array([[np.cos(pitch), 0, -np.sin(pitch)], [0, 1, 0], [np.sin(pitch), 0, np.cos(pitch)]])
         rz = np.array([[np.cos(yaw), np.sin(yaw), 0], [-np.sin(yaw), np.cos(yaw), 0], [0, 0, 1]])
 
-        return rx @ ry @ rz @ self.signals.get_velocity()
+        return rx @ ry @ rz @ self.vel
 
     @staticmethod
     def get_angle_control(feedback, e, v, limit):
@@ -166,12 +176,11 @@ class Controller(threading.Thread):
     def canvas_adjust_reference(self, rx, ry):
         dx, dy = self.signals.get_canvas_diff()
 
-        print(dx)
 
         if not dx == 0:
             # Difference on screen normalized with canvas size and real area size
-            fx = 1 - dx / 300 * 3
-            fy = 1 + dy / 300 * 3
+            fx = 1 - dx / 7500 * 3
+            fy = 1 + dy / 7500 * 3
             rx *= fx
             ry *= fy
 
@@ -179,10 +188,16 @@ class Controller(threading.Thread):
 
     def calc_control_signals(self):
         # Get measurement signals
-        attitude = self.signals.get_attitude()
+        
+        # attitude = self.signals.get_attitude()
+        attitude = self.attitude
+
         vx, vy, vz = self.get_world_velocity(attitude)
         rx, ry, rz = self.signals.get_ref_position()
-        x, y, z = self.signals.get_position()
+
+        # x, y, z = self.signals.get_position()
+        x, y, z = self.pos
+        #print(self.pos)    
 
         rx, ry = self.canvas_adjust_reference(rx, ry)
 
@@ -213,7 +228,7 @@ class Controller(threading.Thread):
         self.reset_estimator()
 
         # Set the current reference to the current positional estimate
-        self.signals.set_ref_position(self.signals.get_position())
+        self.signals.set_ref_position(self.pos)
 
         print('Initial positional reference:', self.signals.get_ref_position())
 

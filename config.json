@@ -1,15 +1,15 @@
 {
   "gravity": 9.81,
   "mass": 0.027,
-  "period_in_ms": 30,
+  "period_in_ms": 40,
   "thrust_initial": 0,
   "thrust_limit": [0, 65535],
   "roll_limit": [-30.0, 30.0],
   "pitch_limit": [-30.0, 30.0],
   "yaw_limit": [-200.0, 200.0],
-  "x_feedback": [6.0957, 2.2268],
-  "y_feedback": [-6.0957, -2.2268],
+  "x_feedback": [5.0957, 2.2268],
+  "y_feedback": [-5.0957, -2.2268],
   "z_feedback": [2.5272, 0.8804],
-  "thrust_scale": 44000,
+  "thrust_scale": 42000,
   "debug_driver": 0
 }

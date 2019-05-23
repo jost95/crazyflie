@@ -93,6 +93,7 @@ class Application:
 
     def toggle_engines(self):
         self.signals.switch_toggle()
+		
 
         if self.engines_on:
             self.engines_btn_text.set("Start engines")
